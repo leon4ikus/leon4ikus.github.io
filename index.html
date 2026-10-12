@@ -27,7 +27,7 @@
 <section><div class="section-head"><div><h1>Добро пожаловать в VibeX</h1><p>Найди любимую музыку и открой что-то новое.</p></div></div><div class="pills" id="genres"><button class="pill active" data-term="top hits 2025">Популярное</button><button class="pill" data-term="pop hits">Поп</button><button class="pill" data-term="hip hop hits">Хип-хоп</button><button class="pill" data-term="rock classics">Рок</button><button class="pill" data-term="electronic dance">Электроника</button><button class="pill" data-term="lofi chill">Lo-fi</button><button class="pill" data-term="russian pop hits">Русская музыка</button></div></section>
 <section><div class="section-head"><div><h2>Подборка для тебя</h2><p>Музыка для старта — нажми на карточку, чтобы послушать превью.</p></div><button class="plain-btn" id="refreshBtn">Обновить</button></div><div class="cards" id="featured"><div class="empty">Загружаем музыку…</div></div></section>
 <section><div class="section-head"><div><h2 id="listTitle">Популярные треки</h2><p id="listSubtitle">Результаты музыкального каталога</p></div></div><div class="tracklist" id="tracklist"><div class="empty">Загружаем каталог…</div></div><div style="text-align:center;margin-top:16px"><button class="pill" id="moreBtn">Загрузить ещё</button></div></section>
-<div class="notice">VibeX ищет полные аудиозаписи в Internet Archive и показывает только записи, для которых найдено указание на свободную лицензию. Условия использования могут отличаться — проверь лицензию на странице каждой записи.</div>
+<div class="notice">VibeX объединяет результаты Internet Archive и Jamendo. Условия лицензий отличаются — проверь лицензию на странице каждой записи.</div>
 </div>
 </main>
 </div>
@@ -65,7 +65,14 @@ async function searchMusic(term,append=false){
     return {id:d.identifier,name:title,artist,album:meta.album||'Internet Archive',artworkUrl100:'',previewUrl:'https://archive.org/download/'+encodeURIComponent(d.identifier)+'/'+file.name.split('/').map(encodeURIComponent).join('/'),url:'https://archive.org/details/'+encodeURIComponent(d.identifier),genre:(meta.subject||'').toString(),duration:Number(file.length||0),license:lic};
    }catch(e){return null}
   }));
-  if(id!==requestId)return;const valid=results.filter(Boolean);const seen=new Set(tracks.map(t=>t.id));tracks=append?tracks.concat(valid.filter(t=>!seen.has(t.id))):valid;queue=tracks.slice();queueIndex=0;
+  if(id!==requestId)return;
+  let jamendo=[];
+  try{
+   const ju=new URL('https://api.jamendo.com/v3.0/tracks/');
+   ju.search=new URLSearchParams({client_id:'73439e6b',format:'json',namesearch:searchTerm,limit:'20',audioformat:'mp31',include:'musicinfo'});
+   const jr=await fetch(ju);if(jr.ok){const jd=await jr.json();jamendo=(jd.results||[]).filter(t=>t.audio&&t.license_ccurl&&/creativecommons\\.org\\/(licenses\\/(by|by-sa|by-nc|by-nc-sa)|publicdomain\\/zero)/i.test(t.license_ccurl)).map(t=>({id:'jamendo-'+t.id,name:t.name,artist:t.artist_name||'Неизвестный исполнитель',album:t.album_name||'Jamendo',artworkUrl100:t.album_image||'',previewUrl:t.audio,url:t.shareurl||'https://www.jamendo.com/track/'+t.id,genre:(t.musicinfo?.tags?.genres||[]).join(', '),duration:Number(t.duration||0),license:t.license_ccurl,source:'Jamendo'}));}
+  }catch(e){console.warn('Jamendo API unavailable',e)}
+  const valid=[...results.filter(Boolean),...jamendo];const seen=new Set(tracks.map(t=>t.id));tracks=append?tracks.concat(valid.filter(t=>!seen.has(t.id))):valid;queue=tracks.slice();queueIndex=0;
   renderTracks();renderFeatured();$('#listTitle').textContent=currentView==='favorites'?'Моя медиатека':(searchTerm==='music'?'Полные треки':'Результаты: '+searchTerm);
   $('#listSubtitle').textContent=tracks.length+' полных аудиозаписей с указанной лицензией';setStatus(tracks.length?'Можно слушать полные записи':'По этому запросу нет подходящих записей с подтверждённой лицензией');
  }catch(e){if(id!==requestId)return;$('#featured').innerHTML='<div class="empty">Каталог временно недоступен. Попробуй ещё раз.</div>';$('#tracklist').innerHTML='<div class="empty">Не удалось загрузить музыку.</div>';setStatus('Ошибка подключения к каталогу')}
